@@ -24,11 +24,12 @@ namespace dig
 
 
             string hostname = "mail.google.com";
-            prog.SendRequest(hostname, DnsType.AAAA);
-            //IPAddress defaultDNS = prog.FindDefaultDNS();
+            IPAddress defaultDns = prog.FindDefaultDNS();
+            prog.SendRequest(hostname, DnsType.AAAA, defaultDns);
+
         }
 
-        private void SendRequest(string hostname, DnsType type)
+        private void SendRequest(string hostname, DnsType type, IPAddress defaultDns)
         {
             //var data = "ger";
             //byte[] data = new byte[74];
@@ -118,7 +119,7 @@ namespace dig
             byteList.Add(0x01);
 
 
-            Udp(byteList.ToArray());
+            Udp(byteList.ToArray(), defaultDns);
         }
 
         public static Byte[] ToByteArray(String hexString)
@@ -130,7 +131,7 @@ namespace dig
         }
 
 
-        async void Udp(Byte[] data)
+        async void Udp(Byte[] data, IPAddress dnsAddress)
         {
             try
             {
@@ -144,8 +145,12 @@ namespace dig
                     //IPAddress defaultDNS = FindDefaultDNS();
 
                     //IPAddress serverAddr = IPAddress.Parse("192.168.2.255");
-                    IPAddress serverAddr = IPAddress.Parse("209.18.47.61");
-                    var ep = new System.Net.IPEndPoint(serverAddr, 53);//11000);
+                    //IPAddress serverAddr = IPAddress.Parse("209.18.47.61");
+
+                    //string serverStr = System.Text.Encoding.ASCII.GetString(dnsAddress.GetAddressBytes());
+//                    IPAddress serverAddr = IPAddress.Parse(d);
+
+                    var ep = new System.Net.IPEndPoint(dnsAddress, 53);//11000);
                     
 
 
@@ -173,21 +178,72 @@ namespace dig
 
         private IPAddress FindDefaultDNS()
         {
+            Boolean isValid; // = false;
+
+            foreach (var netI in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                isValid = false;
+
+                if (netI.NetworkInterfaceType != NetworkInterfaceType.Wireless80211 &&
+                    (netI.NetworkInterfaceType != NetworkInterfaceType.Ethernet ||
+                     netI.OperationalStatus != OperationalStatus.Up)) continue;
+                foreach (var uniIpAddrInfo in netI.GetIPProperties().UnicastAddresses.Where(x => netI.GetIPProperties().GatewayAddresses.Count > 0))
+                {
+
+
+
+                    if ((uniIpAddrInfo.Address.AddressFamily == AddressFamily.InterNetwork || uniIpAddrInfo.Address.AddressFamily == AddressFamily.InterNetworkV6) &&
+                        uniIpAddrInfo.AddressPreferredLifetime != uint.MaxValue) { 
+
+                        isValid = true;
+                        break;
+                    }
+                    
+                }
+
+                if (isValid)
+                {
+                    foreach (IPAddress dnsAdd in netI.GetIPProperties().DnsAddresses)
+                    {
+                        return dnsAdd;
+                    }
+                    //IPAddress ipAddr = netI.GetIPProperties().DnsAddresses;
+                }
+
+            }
+
+            throw new Exception("Could not find DNS Server");
+        }
+
+
+            /*
             foreach (NetworkInterface ni in NetworkInterface.GetAllNetworkInterfaces())
             {
                 if (ni.OperationalStatus == OperationalStatus.Up && ni.NetworkInterfaceType != NetworkInterfaceType.Tunnel && ni.NetworkInterfaceType != NetworkInterfaceType.Loopback)
                 {
                     IPAddressCollection dnsAddresses = ni.GetIPProperties().DnsAddresses;
 
-                    foreach (IPAddress dnsAdress in dnsAddresses)
+                    foreach (IPAddress dnsAddress in dnsAddresses.Where(ip => ( ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork) || (ip.AddressFamily == AddressFamily.InterNetworkV6)    ))
                     {
-                        return dnsAdress;
+
+                       
+                        try
+                        {
+                            new System.Net.IPEndPoint(dnsAddress, 53);
+                        }
+                        catch
+                        {
+                            continue;
+                        }
+
+                        
+                        return dnsAddress;
                     }
                 }
             }
 
             throw new InvalidOperationException("Unable to find DNS Address");
-        }
+            */
         
        
     }
