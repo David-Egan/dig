@@ -1,0 +1,11 @@
+C:\Users\degan\workspace\copads\dig\bin\Debug\netcoreapp2.1\dig.deps.json
+C:\Users\degan\workspace\copads\dig\bin\Debug\netcoreapp2.1\dig.runtimeconfig.json
+C:\Users\degan\workspace\copads\dig\bin\Debug\netcoreapp2.1\dig.runtimeconfig.dev.json
+C:\Users\degan\workspace\copads\dig\bin\Debug\netcoreapp2.1\dig.dll
+C:\Users\degan\workspace\copads\dig\bin\Debug\netcoreapp2.1\dig.pdb
+C:\Users\degan\workspace\copads\dig\obj\Debug\netcoreapp2.1\dig.csprojAssemblyReference.cache
+C:\Users\degan\workspace\copads\dig\obj\Debug\netcoreapp2.1\dig.csproj.CoreCompileInputs.cache
+C:\Users\degan\workspace\copads\dig\obj\Debug\netcoreapp2.1\dig.AssemblyInfoInputs.cache
+C:\Users\degan\workspace\copads\dig\obj\Debug\netcoreapp2.1\dig.AssemblyInfo.cs
+C:\Users\degan\workspace\copads\dig\obj\Debug\netcoreapp2.1\dig.dll
+C:\Users\degan\workspace\copads\dig\obj\Debug\netcoreapp2.1\dig.pdb
