@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "dig": {
+      "commandName": "Project",
+      "commandLineArgs": "AAAA mail.google.com"
+    }
+  }
+}

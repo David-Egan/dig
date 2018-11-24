@@ -20,13 +20,38 @@ namespace dig
     {
         static void Main(string[] args)
         {
-            Console.WriteLine("Hello World!");
+            string hostname  = "";
+            IPAddress dnsServer = null;
+            DnsType dnsType = 0;
+
             Program prog = new Program();
 
+            if (args.Length > 3 || args.Length == 0)
+            {
+                Console.WriteLine("Incorrect amont of arguments. Terminating program");
+                return;
+            } else if (args.Length == 1)
+            {
+                hostname = args[0];
+                dnsType = DnsType.A;
+                dnsServer = prog.FindDefaultDNS();
+            } else if (args.Length == 2)
+            {
+                string typeString = args[0];
+                hostname = args[1];
+                dnsType = (typeString == "A") ? DnsType.A : DnsType.AAAA;
+                dnsServer = prog.FindDefaultDNS();
+            } else if (args.Length == 3)
+            {
+                dnsServer = IPAddress.Parse(args[0]);
+                dnsType = (args[1] == "A") ? DnsType.A : DnsType.AAAA;
+                hostname = args[2];
+            }
 
-            string hostname = "rit.edu";
-            IPAddress defaultDns = prog.FindDefaultDNS();
-            prog.SendRequest(hostname, DnsType.A, defaultDns);
+
+            Console.WriteLine("David's DigLite");
+           
+            prog.SendRequest(hostname, dnsType, dnsServer);
 
         }
 
@@ -120,7 +145,7 @@ namespace dig
             byteList.Add(0x01);
 
 
-            Udp(byteList.ToArray(), defaultDns, hostname);
+            Udp(byteList.ToArray(), defaultDns, hostname, type);
 
             Console.ReadKey();
         }
@@ -137,6 +162,9 @@ namespace dig
         {
             byte[] resultBuffer = result.Buffer;
 
+            Console.WriteLine();
+            Console.WriteLine(";; ANSWER SECTION");            
+
 
             // 0-1 Transaction ID
             // DONT CARE
@@ -151,8 +179,13 @@ namespace dig
 
     
             Int32 answerCount = TranslateBytes(resultBuffer, 6, 2);
+            if (answerCount == 0)
+            {
+                Console.WriteLine("NO ANSWERS");
+                return;
+            }
 
-            Console.WriteLine("Answer Count is: " + answerCount);
+            //Console.WriteLine("Answer Count is: " + answerCount);
 
 
             // 8-9 Authority Counts (always 0 for requests)
@@ -169,7 +202,7 @@ namespace dig
             // current byte = 13 (12th index)
             hostname = hostname + "";
 
-            Console.WriteLine("Hostname is: " + hostname);
+            //Console.WriteLine("Hostname is: " + hostname);
                 
             int currByte = 12;
 
@@ -191,22 +224,28 @@ namespace dig
             }
 
             currByte += 2;
-            Console.WriteLine("Type is: " + (type == DnsType.A ? "A" : "AAAA"));
+            //Console.WriteLine("Type is: " + (type == DnsType.A ? "A" : "AAAA"));
 
+            string dnsTypeString = (type == DnsType.A ? "A" : "AAAA");
 
             // Class: 2 bytes maybe doesnt matter IN is 0001           
             Int32 classVal = TranslateBytes(resultBuffer, currByte, 2); 
 
-            Console.WriteLine("Class is: " + classVal + "  1 is IN");
+            //Console.WriteLine("Class is: " + classVal + "  1 is IN");
 
             currByte += 2;
 
-            while (currByte  < resultBuffer.Length)
+            int currAnswer = 0;
+            while (currAnswer < answerCount)
             {
+                currAnswer += 1; 
+
+                string resultStr;
                 // pointer detected!!!!!
                 if (resultBuffer[currByte] == 0xc0)
                 {
                     StringBuilder sb = new StringBuilder();
+                    
 
                     int runLengthLeft; //= currByte + 1;
 
@@ -229,8 +268,7 @@ namespace dig
                      
                     }
 
-                    Console.WriteLine(sb.ToString());
-                    Thread.Sleep(5000);
+                    resultStr = sb.ToString();                    
                     currByte += 2;
                 }
                 else
@@ -257,9 +295,8 @@ namespace dig
 
                     }
 
-                    currByte = pointer++;
-                    Thread.Sleep(5000);
-                    Console.WriteLine(sb.ToString());
+                    currByte = pointer++;                    
+                    resultStr = sb.ToString();
                 }
 
 
@@ -268,36 +305,146 @@ namespace dig
                 // read in answer            
                 int answerType = TranslateBytes(resultBuffer, currByte, 2);
                 currByte += 2;
-                Console.WriteLine("Answer val: " + answerType );
+                //Console.WriteLine("Answer val: " + answerType );
 
                 // read in class
                 classVal = TranslateBytes(resultBuffer, currByte, 2);
                 currByte += 2;
-                Console.WriteLine("Class val: " + classVal);
+                //Console.WriteLine("Class val: " + classVal);
 
 
                 // time to live
                 int ttl = TranslateBytes(resultBuffer, currByte, 4);
                 currByte += 4;
-                Console.WriteLine("time to live: " + ttl);
+                //Console.WriteLine("time to live: " + ttl);
 
                 // data length
                 int dataLength = TranslateBytes(resultBuffer, currByte, 2);
                 currByte += 2;
-                Console.WriteLine("data length: " + dataLength);
+                //Console.WriteLine("data length: " + dataLength);
 
                 // address
-                StringBuilder ipadd = new StringBuilder();
-                for (int i = 0; i < dataLength; i++){                    
-                    ipadd.Append((int)resultBuffer[currByte]);
-                    ipadd.Append(".");
-                    currByte++;
+                StringBuilder ipadd;
+                if (type == DnsType.A)
+                {
+                    ipadd = new StringBuilder();
+                    for (int i = 0; i < dataLength; i++)
+                    {
+                        ipadd.Append((int)resultBuffer[currByte]);
+                        ipadd.Append(".");
+                        currByte++;
+                    }
                 }
+                else if (type == DnsType.AAAA)
+                {
+                    ipadd = new StringBuilder();
+                    for (int i = 0; i < dataLength; i ++)
+                    {
+                        if (i != 0) { ipadd.Append(":"); } 
+
+                        string[] nextSegment = new string[2];
+                        //resultBuffer[currByte].ToString() + resultBuffer[currByte]
+                        string part1 = resultBuffer[currByte].ToString("x2");
+                        string part2 = resultBuffer[currByte+1].ToString("x2");
+                        part2 = (part1 + part2).TrimStart('0');
+                        if (String.IsNullOrEmpty(part2))
+                        {
+                            part2 = "0";
+                        }
+                        ipadd.Append(part2);
+                        currByte += 2;
+
+                        i++;
+                    }
+                }
+                //CNAME
+                else
+                {
+                    int endOfData = currByte + dataLength;
+                    StringBuilder sb2 = new StringBuilder();
+                    string cname;
+
+                    while (currByte < endOfData )
+                    {
+
+                    
+
+                        int cnameLengthLeft = dataLength;   
+
+                        if (resultBuffer[currByte] == 0xc0)
+                        {
+                            //StringBuilder sb2 = new StringBuilder();
+
+
+                            int runLengthLeft; //= currByte + 1;
+
+                            int offset = resultBuffer[currByte + 1];
+                            int pointer = offset; //= currByte + 2;
+
+                            while (resultBuffer[pointer] != 0)
+                            {
+                                runLengthLeft = resultBuffer[pointer];
+                                pointer++;
+
+                                while (runLengthLeft > 0)   //resultBuffer[pointer] != 0)
+                                {
+                                    sb2.Append(Encoding.ASCII.GetString(new[] { resultBuffer[pointer] }));
+                                    runLengthLeft--;
+                                    pointer++;
+                                }
+
+                                if (resultBuffer[pointer] != 0) { sb2.Append("."); }
+
+                            }
+
+                            currByte += 2;
+                            //resultStr = sb2.ToString();
+                            //progress += 2;
+                        }
+                        else
+                        {
+                            //StringBuilder sb2 = new StringBuilder();
+
+                            int runLengthLeft;
+
+                            int pointer = currByte; //= currByte + 2;
+
+                            while (resultBuffer[pointer] != 0)
+                            {
+                                runLengthLeft = resultBuffer[pointer];
+                                pointer++;
+
+                                while (runLengthLeft > 0)   //resultBuffer[pointer] != 0)
+                                {
+                                    sb2.Append(Encoding.ASCII.GetString(new[] { resultBuffer[pointer] }));
+                                    runLengthLeft--;
+                                    pointer++;
+                                }
+
+                                if (resultBuffer[pointer] != 0) { sb2.Append("."); }
+
+                            }
+
+                            currByte = pointer;
+                        }
+
+                        
+                        //currByte = pointer++;
+                        //resultStr = sb2.ToString();
+                    }
+
+                    ipadd = sb2;
+                    cname = sb2.ToString();
+                    Console.WriteLine("cname found " + cname);
+                }
+
+                
                 //int address = TranslateBytes(resultBuffer, currByte, dataLength);
                 //currByte += dataLength;
-                Console.WriteLine("compressed ip address: " + ipadd.ToString());
+                
 
-
+                Console.WriteLine(";" + resultStr + "\t" + ttl + "\t" + classVal + "\t" + dnsTypeString + "\t" + ipadd.ToString());
+                
 
             }
 
@@ -311,35 +458,49 @@ namespace dig
 
             Array.Copy(sourceArr, startIndex, targetBytes, 0, length);
             targetBytes = targetBytes.Reverse().ToArray();
-            Int32 result = BitConverter.ToInt16(targetBytes);
+            Int32 result = BitConverter.ToInt16(targetBytes)    ;
             return result;
         }
 
-        async void Udp(Byte[] data, IPAddress dnsAddress, string hostname)
+        async void Udp(Byte[] data, IPAddress dnsAddress, string hostname, DnsType dnsType)
         {
             try
             {
                 var client = new UdpClient(5080);
-                //client.
-                for (; ; )
-                {
-                    var ep = new System.Net.IPEndPoint(dnsAddress, 53);
+                
+                var ep = new System.Net.IPEndPoint(dnsAddress, 53);
                     
-                    System.Console.WriteLine(ep.Address.ToString() + " " + ep.Port);
+                //System.Console.WriteLine(ep.Address.ToString() + " " + ep.Port);
                     
-                    var msg = data;//System.Text.Encoding.ASCII.GetBytes(data);
-                                  
-                    var i = await client.SendAsync(msg, msg.Length, ep);
+                var msg = data;//System.Text.Encoding.ASCII.GetBytes(data);
 
-                    UdpReceiveResult response = await client.ReceiveAsync();
-                    ReadResponse(response, hostname);
 
-                    Thread.Sleep(5000);
-                    Console.WriteLine("response received from " + response.RemoteEndPoint);         
+                Console.WriteLine();
+                Console.WriteLine();
+                Console.WriteLine(";; QUESTION SECTION");
+                Console.Write(";" + hostname + "." + "  IN" + " ");
+                Console.WriteLine((dnsType == DnsType.A) ? "A" : "AAAA");
+
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+
+                var i = await client.SendAsync(msg, msg.Length, ep);                           
+
+                UdpReceiveResult response = await client.ReceiveAsync();
+                watch.Stop();
+
+                ReadResponse(response, hostname);
+
+                Console.WriteLine("Query Time: " + watch.ElapsedMilliseconds + "ms");
+                Console.WriteLine("Server: " + dnsAddress);
+                Console.WriteLine("WHEN: " + DateTime.Now);
+                Console.WriteLine("MSG SIZE rcvd: " + response.Buffer.Length);
+
+                Thread.Sleep(5000);
+                //Console.WriteLine("response received from " + response.RemoteEndPoint);         
                     
                     
-                    System.Console.WriteLine(i + " bytes sent");
-                }
+                //Console.WriteLine(i + " bytes sent");
+                
             }
             catch (Exception e)
             {
