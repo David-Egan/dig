@@ -63,48 +63,31 @@ namespace dig
         {
             List<byte> byteList = new List<byte>();
 
-            Byte[] data = ToByteArray("387101000001000000000000076578616d706c6503636f6d00001c0001");
-            //data[]
-
             // 0-1 Transaction ID
             byteList.Add(0x38);
             byteList.Add(0x71);
-            data[0] = 0x38;
-            data[1] = 0x71;
 
             // 2-3 Flags: Standard Query is 0100
             byteList.Add(0x01);
             byteList.Add(0x00);
-            data[2] = 0x01;
-            data[3] = 0x00;
 
             // 4-5 Question Count (I think always gonna be 0001)
             byteList.Add(0x00);
             byteList.Add(0x01);
-            data[4] = 0x00;
-            data[5] = 0x01;
 
             // 6-7 Answer Counts (always 0 for requests)
             byteList.Add(0x00);
             byteList.Add(0x00);
-            data[6] = 0x00;
-            data[7] = 0x00;
 
             // 8-9 Authority Counts (always 0 for requests)
             byteList.Add(0x00);
             byteList.Add(0x00);
-            data[8] = 0x00;
-            data[9] = 0x00;
 
             // 10-11 Additional Counts (always 0 for requests)
             byteList.Add(0x00);
             byteList.Add(0x00);
-            data[10] = 0x00;
-            data[11] = 0x00;
 
-            // The Rest is Queries section
-            //
-
+            // The Rest is Queries section            
             // Name: however long it needs to be ALWAYS ends in 00 SOMETIMES starts with value that isn't letter
             string[] hostnameComponents = hostname.Split(".");
             List<byte> hostnameBytes = new List<byte>();
@@ -114,19 +97,12 @@ namespace dig
             {
                 int slen = s.Length;
 
-
                 hostnameBytes.Add((byte)(slen));
                 hostnameBytes.AddRange(System.Text.Encoding.ASCII.GetBytes(s)); 
-
-
             }
 
-
-            //byte[] hostnameBytes = System.Text.Encoding.ASCII.GetBytes(hostname);
             byteList.AddRange(hostnameBytes);
             byteList.Add(0x00);
-
-
 
             // Type: 2 bytes 0001 is Type A, 001c is Type AAAA
             if (type == DnsType.A)
@@ -145,7 +121,7 @@ namespace dig
             byteList.Add(0x01);
 
 
-            SendUdpRequest(byteList.ToArray(), defaultDns, hostname, type);            
+            SendUdpRequest(byteList.ToArray(), defaultDns, hostname, type);
         }
 
         public static Byte[] ToByteArray(String hexString)
@@ -156,53 +132,18 @@ namespace dig
             return retval;
         }
 
-        private void ReadResponse(UdpReceiveResult result, string hostname)
+        private void ReadResponse(byte[] resultBuffer, string hostname)
         {
-            byte[] resultBuffer = result.Buffer;
-
             Console.WriteLine();
             Console.WriteLine(";; ANSWER SECTION");            
 
-
-            // 0-1 Transaction ID
-            // DONT CARE
-
-            // 2-3 Flags: Standard Query is 0100
-            // DONT CARE
-
-            // 4-5 Question Count should always be 0001
-            // DONT CARE
-
-            // 6-7 Answer Counts (always 0 for requests)
-
-    
             Int32 answerCount = TranslateBytes(resultBuffer, 6, 2);
             if (answerCount == 0)
             {
                 Console.WriteLine("NO ANSWERS");
                 return;
             }
-
-            //Console.WriteLine("Answer Count is: " + answerCount);
-
-
-            // 8-9 Authority Counts (always 0 for requests)
-            // DONT CARE
-
-            // 10-11 Additional Counts (always 0 for requests)
-            // DONT CARE
-
-            // The Rest is Queries section
-            //
-
-
-            //List<byte> hostnameBytes = new List<byte>();
-            //int currHostnameByte = 12;
-
-            //while (resultBuffer[currHostnameByte] != 0)
-            //{
-            //    hostnameBytes.Add(resultBuffer[currHostnameByte]);
-            //}
+          
             string[] hostnameSegments = hostname.Split(".");
 
             int currBytePos = 12;
@@ -211,19 +152,10 @@ namespace dig
             {
                 pointerList[currBytePos] = hostnameSegments[i];
                 currBytePos += hostnameSegments[i].Length + 1;
-            }
-
-            
-
-            // Name: however long it needs to be ALWAYS ends in 00 SOMETIMES starts with value that isn't letter
-
-            // current byte = 13 (12th index)
-            hostname = hostname + "";
-
-            //Console.WriteLine("Hostname is: " + hostname);
+            }                        
                 
+            // skip through hostname data we already know
             int currByte = 12;
-
             while (resultBuffer[currByte] != 0)
             {
                 currByte++;
@@ -242,15 +174,8 @@ namespace dig
             }
 
             currByte += 2;
-            //Console.WriteLine("Type is: " + (type == DnsType.A ? "A" : "AAAA"));
-
             
-
-            // Class: 2 bytes maybe doesnt matter IN is 0001           
-            Int32 classVal = TranslateBytes(resultBuffer, currByte, 2); 
-
-            //Console.WriteLine("Class is: " + classVal + "  1 is IN");
-
+            // Class: 2 bytes maybe doesnt matter            
             currByte += 2;
 
             int currAnswer = 0;
@@ -260,12 +185,7 @@ namespace dig
 
                 int startOfString = currByte;
                 string resultStr = ReadString(resultBuffer, ref currByte, int.MaxValue);                
-                //this.pointerList[startOfString] = resultStr;
-
-                // read in other garabage
-
-                // read in answer            
-               // int answerTypeVal = TranslateBytes(resultBuffer, currByte, 2);
+               
                 DnsType answerType;
 
                 string dnsTypeString;
@@ -284,14 +204,10 @@ namespace dig
                     dnsTypeString = "CNAME";
                 }
 
-
-
                 currByte += 2;           
 
-                // read in class
-                classVal = TranslateBytes(resultBuffer, currByte, 2);
+                // skip in class
                 currByte += 2;                
-
 
                 // time to live
                 int ttl = TranslateBytes(resultBuffer, currByte, 4);
@@ -335,7 +251,6 @@ namespace dig
                         i++;
                     }
                 }
-                //CNAME
                 else if (answerType == DnsType.CNAME)
                 {
                     int endOfData = currByte + dataLength;
@@ -356,19 +271,10 @@ namespace dig
                 {
                     throw new Exception("Unacceptable DNS Type found in Answer");
                 }
-
-
-
-                //int address = TranslateBytes(resultBuffer, currByte, dataLength);
-                //currByte += dataLength;
                    
-                Console.WriteLine(String.Format(";{0,-30} {1,-15} {2, -10} {3, -20} {4, -20}",
+                Console.WriteLine(String.Format(";{0,-20} {1,-10} {2, -10} {3, -20} {4, -20}",
                         resultStr, ttl, "IN", dnsTypeString, ipadd.ToString()));
-
-            }
-
-
-
+            }  
         }
 
         private int TranslateBytes(byte[] sourceArr, int startIndex, int length)
@@ -391,7 +297,7 @@ namespace dig
             return result;
         }
 
-        async void SendUdpRequest(Byte[] data, IPAddress dnsAddress, string hostname, DnsType dnsType)
+        private void SendUdpRequest(Byte[] data, IPAddress dnsAddress, string hostname, DnsType dnsType)
         {
             try
             {
@@ -403,14 +309,12 @@ namespace dig
                 Console.WriteLine();
                 Console.WriteLine(";; QUESTION SECTION");
                 string typeStr = (dnsType == DnsType.A) ? "A" : "AAAA";
-                Console.WriteLine(String.Format(";{0,-30} {1,-10} {2, -10} \n",
+                Console.WriteLine(String.Format(";{0,-31} {1,-10} {2, -10} \n",
                         hostname, "IN", typeStr));
 
-                var watch = System.Diagnostics.Stopwatch.StartNew();
-
-                var i = await client.SendAsync(data, data.Length, ep);                           
-
-                UdpReceiveResult response = await client.ReceiveAsync();
+                var watch = System.Diagnostics.Stopwatch.StartNew();            
+                var i = client.Send(data, data.Length, ep);
+                byte[] response = client.Receive(ref ep);
                 watch.Stop();
 
                 ReadResponse(response, hostname);
@@ -419,7 +323,7 @@ namespace dig
                 Console.WriteLine(";;Query Time: " + watch.ElapsedMilliseconds + "ms");
                 Console.WriteLine(";;Server: " + dnsAddress);
                 Console.WriteLine(";;WHEN: " + DateTime.Now.ToString("dddd MMM dd HH:mm:ss yyyy"));
-                Console.WriteLine(";;MSG SIZE rcvd: " + response.Buffer.Length);
+                Console.WriteLine(";;MSG SIZE rcvd: " + response.Length);
                 
             }
             catch (Exception e)
