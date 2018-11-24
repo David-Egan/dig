@@ -13,7 +13,8 @@ namespace dig
     enum DnsType
     {
         A,
-        AAAA
+        AAAA,
+        CNAME
     }
 
     class Program
@@ -238,72 +239,31 @@ namespace dig
             int currAnswer = 0;
             while (currAnswer < answerCount)
             {
-                currAnswer += 1; 
+                currAnswer += 1;
 
-                string resultStr;
-                // pointer detected!!!!!
-                if (resultBuffer[currByte] == 0xc0)
-                {
-                    StringBuilder sb = new StringBuilder();
-                    
-
-                    int runLengthLeft; //= currByte + 1;
-
-                    int offset = resultBuffer[currByte + 1];
-                    int pointer = offset; //= currByte + 2;
-
-                    while (resultBuffer[pointer] != 0)
-                    {
-                        runLengthLeft = resultBuffer[pointer];
-                        pointer++;
-
-                        while (runLengthLeft > 0)   //resultBuffer[pointer] != 0)
-                        {
-                            sb.Append(Encoding.ASCII.GetString(new[] { resultBuffer[pointer] }));
-                            runLengthLeft--;
-                            pointer++;
-                        }
-
-                        if (resultBuffer[pointer] != 0) { sb.Append(".");  }
-                     
-                    }
-
-                    resultStr = sb.ToString();                    
-                    currByte += 2;
-                }
-                else
-                {
-                    StringBuilder sb = new StringBuilder();
-
-                    int runLengthLeft;
-                    
-                    int pointer = currByte; //= currByte + 2;
-
-                    while (resultBuffer[pointer] != 0)
-                    {
-                        runLengthLeft = resultBuffer[pointer];
-                        pointer++;
-
-                        while (runLengthLeft > 0)   //resultBuffer[pointer] != 0)
-                        {
-                            sb.Append(Encoding.ASCII.GetString(new[] { resultBuffer[pointer] }));
-                            runLengthLeft--;
-                            pointer++;
-                        }
-
-                        if (resultBuffer[pointer] != 0) { sb.Append("."); }
-
-                    }
-
-                    currByte = pointer++;                    
-                    resultStr = sb.ToString();
-                }
+                string resultStr = ReadString(resultBuffer, ref currByte);
 
 
                 // read in other garabage
 
                 // read in answer            
-                int answerType = TranslateBytes(resultBuffer, currByte, 2);
+               // int answerTypeVal = TranslateBytes(resultBuffer, currByte, 2);
+                DnsType answerType;
+
+                if (resultBuffer[currByte] == 0x00 && resultBuffer[currByte+1] == 0x01) {
+                    answerType = DnsType.A;
+                }
+                else if (resultBuffer[currByte] == 0x00 && resultBuffer[currByte] == 0x1c)
+                {
+                    answerType = DnsType.AAAA;
+                }
+                else
+                {
+                    answerType = DnsType.CNAME;
+                }
+
+
+
                 currByte += 2;
                 //Console.WriteLine("Answer val: " + answerType );
 
@@ -325,7 +285,7 @@ namespace dig
 
                 // address
                 StringBuilder ipadd;
-                if (type == DnsType.A)
+                if (answerType == DnsType.A)
                 {
                     ipadd = new StringBuilder();
                     for (int i = 0; i < dataLength; i++)
@@ -335,7 +295,7 @@ namespace dig
                         currByte++;
                     }
                 }
-                else if (type == DnsType.AAAA)
+                else if (answerType == DnsType.AAAA)
                 {
                     ipadd = new StringBuilder();
                     for (int i = 0; i < dataLength; i ++)
@@ -358,85 +318,31 @@ namespace dig
                     }
                 }
                 //CNAME
-                else
+                else if (answerType == DnsType.CNAME)
                 {
                     int endOfData = currByte + dataLength;
                     StringBuilder sb2 = new StringBuilder();
                     string cname;
 
-                    while (currByte < endOfData )
-                    {
+                    //while (currByte < endOfData )
+                    //{
 
                     
 
-                        int cnameLengthLeft = dataLength;   
+                        int cnameLengthLeft = dataLength;
+                        string cnameStr = ReadString(resultBuffer, ref currByte);
 
-                        if (resultBuffer[currByte] == 0xc0)
-                        {
-                            //StringBuilder sb2 = new StringBuilder();
-
-
-                            int runLengthLeft; //= currByte + 1;
-
-                            int offset = resultBuffer[currByte + 1];
-                            int pointer = offset; //= currByte + 2;
-
-                            while (resultBuffer[pointer] != 0)
-                            {
-                                runLengthLeft = resultBuffer[pointer];
-                                pointer++;
-
-                                while (runLengthLeft > 0)   //resultBuffer[pointer] != 0)
-                                {
-                                    sb2.Append(Encoding.ASCII.GetString(new[] { resultBuffer[pointer] }));
-                                    runLengthLeft--;
-                                    pointer++;
-                                }
-
-                                if (resultBuffer[pointer] != 0) { sb2.Append("."); }
-
-                            }
-
-                            currByte += 2;
-                            //resultStr = sb2.ToString();
-                            //progress += 2;
-                        }
-                        else
-                        {
-                            //StringBuilder sb2 = new StringBuilder();
-
-                            int runLengthLeft;
-
-                            int pointer = currByte; //= currByte + 2;
-
-                            while (resultBuffer[pointer] != 0)
-                            {
-                                runLengthLeft = resultBuffer[pointer];
-                                pointer++;
-
-                                while (runLengthLeft > 0)   //resultBuffer[pointer] != 0)
-                                {
-                                    sb2.Append(Encoding.ASCII.GetString(new[] { resultBuffer[pointer] }));
-                                    runLengthLeft--;
-                                    pointer++;
-                                }
-
-                                if (resultBuffer[pointer] != 0) { sb2.Append("."); }
-
-                            }
-
-                            currByte = pointer;
-                        }
-
-                        
-                        //currByte = pointer++;
-                        //resultStr = sb2.ToString();
-                    }
+                    //}
 
                     ipadd = sb2;
                     cname = sb2.ToString();
                     Console.WriteLine("cname found " + cname);
                 }
+                else
+                {
+                    throw new Exception("Unacceptable DNS Type found in Answer");
+                }
+                
 
                 
                 //int address = TranslateBytes(resultBuffer, currByte, dataLength);
@@ -458,7 +364,17 @@ namespace dig
 
             Array.Copy(sourceArr, startIndex, targetBytes, 0, length);
             targetBytes = targetBytes.Reverse().ToArray();
-            Int32 result = BitConverter.ToInt16(targetBytes)    ;
+
+            Int32 result;
+            if (length == 4)
+            {
+                result = BitConverter.ToInt32(targetBytes);
+                
+            } else
+            {
+                result = BitConverter.ToInt16(targetBytes);
+            }
+            
             return result;
         }
 
@@ -545,6 +461,73 @@ namespace dig
 
             throw new Exception("Could not find DNS Server");
         }
-       
+
+        private string ReadString(byte[] resultBuffer, ref int currByte)
+        {
+            string resultStr;
+            // pointer detected!!!!!
+            if (resultBuffer[currByte] == 0xc0)
+            {
+                StringBuilder sb = new StringBuilder();
+
+
+                int runLengthLeft; //= currByte + 1;
+
+                int offset = resultBuffer[currByte + 1];
+                int pointer = offset; //= currByte + 2;
+
+                while (resultBuffer[pointer] != 0)
+                {
+                    runLengthLeft = resultBuffer[pointer];
+                    pointer++;
+
+                    while (runLengthLeft > 0)   //resultBuffer[pointer] != 0)
+                    {
+                        sb.Append(Encoding.ASCII.GetString(new[] { resultBuffer[pointer] }));
+                        runLengthLeft--;
+                        pointer++;
+                    }
+
+                    if (resultBuffer[pointer] != 0) { sb.Append("."); }
+
+                }
+
+                resultStr = sb.ToString();
+                currByte += 2;
+
+                return resultStr;
+            }
+            else
+            {
+                StringBuilder sb = new StringBuilder();
+
+                int runLengthLeft;
+
+                int pointer = currByte; //= currByte + 2;
+
+                while (resultBuffer[pointer] != 0)
+                {
+                    runLengthLeft = resultBuffer[pointer];
+                    pointer++;
+
+                    while (runLengthLeft > 0)   //resultBuffer[pointer] != 0)
+                    {
+                        sb.Append(Encoding.ASCII.GetString(new[] { resultBuffer[pointer] }));
+                        runLengthLeft--;
+                        pointer++;
+                    }
+
+                    if (resultBuffer[pointer] != 0) { sb.Append("."); }
+
+                }
+
+                currByte = pointer++;
+                resultStr = sb.ToString();
+                return resultStr;
+            }
+        }
+
     }
+
+    
 }

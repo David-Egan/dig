@@ -2,6 +2,10 @@
   "profiles": {
     "dig": {
       "commandName": "Project",
+      "commandLineArgs": "A webkinz.com"
+    },
+    "google mail": {
+      "commandName": "Project",
       "commandLineArgs": "AAAA mail.google.com"
     }
   }
