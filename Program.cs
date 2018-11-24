@@ -19,6 +19,9 @@ namespace dig
 
     class Program
     {
+        Dictionary<int, String> pointerList = new Dictionary<int, string>();
+
+
         static void Main(string[] args)
         {
             string hostname  = "";
@@ -58,10 +61,6 @@ namespace dig
 
         private void SendRequest(string hostname, DnsType type, IPAddress defaultDns)
         {
-            //var data = "ger";
-            //byte[] data = new byte[74];
-            //data[0] = 0x2c;
-
             List<byte> byteList = new List<byte>();
 
             Byte[] data = ToByteArray("387101000001000000000000076578616d706c6503636f6d00001c0001");
@@ -146,9 +145,7 @@ namespace dig
             byteList.Add(0x01);
 
 
-            Udp(byteList.ToArray(), defaultDns, hostname, type);
-
-            Console.ReadKey();
+            SendUdpRequest(byteList.ToArray(), defaultDns, hostname, type);            
         }
 
         public static Byte[] ToByteArray(String hexString)
@@ -198,6 +195,26 @@ namespace dig
             // The Rest is Queries section
             //
 
+
+            //List<byte> hostnameBytes = new List<byte>();
+            //int currHostnameByte = 12;
+
+            //while (resultBuffer[currHostnameByte] != 0)
+            //{
+            //    hostnameBytes.Add(resultBuffer[currHostnameByte]);
+            //}
+            string[] hostnameSegments = hostname.Split(".");
+
+            int currBytePos = 12;
+
+            for (int i = 0; i < hostnameSegments.Length; i++)
+            {
+                pointerList[currBytePos] = hostnameSegments[i];
+                currBytePos += hostnameSegments[i].Length + 1;
+            }
+
+            
+
             // Name: however long it needs to be ALWAYS ends in 00 SOMETIMES starts with value that isn't letter
 
             // current byte = 13 (12th index)
@@ -227,7 +244,7 @@ namespace dig
             currByte += 2;
             //Console.WriteLine("Type is: " + (type == DnsType.A ? "A" : "AAAA"));
 
-            string dnsTypeString = (type == DnsType.A ? "A" : "AAAA");
+            
 
             // Class: 2 bytes maybe doesnt matter IN is 0001           
             Int32 classVal = TranslateBytes(resultBuffer, currByte, 2); 
@@ -241,8 +258,9 @@ namespace dig
             {
                 currAnswer += 1;
 
-                string resultStr = ReadString(resultBuffer, ref currByte);
-
+                int startOfString = currByte;
+                string resultStr = ReadString(resultBuffer, ref currByte, int.MaxValue);                
+                //this.pointerList[startOfString] = resultStr;
 
                 // read in other garabage
 
@@ -250,38 +268,38 @@ namespace dig
                // int answerTypeVal = TranslateBytes(resultBuffer, currByte, 2);
                 DnsType answerType;
 
+                string dnsTypeString;
                 if (resultBuffer[currByte] == 0x00 && resultBuffer[currByte+1] == 0x01) {
                     answerType = DnsType.A;
+                    dnsTypeString = "A";
                 }
-                else if (resultBuffer[currByte] == 0x00 && resultBuffer[currByte] == 0x1c)
+                else if (resultBuffer[currByte] == 0x00 && resultBuffer[currByte+1] == 0x1c)
                 {
                     answerType = DnsType.AAAA;
+                    dnsTypeString = "AAAA";
                 }
                 else
                 {
                     answerType = DnsType.CNAME;
+                    dnsTypeString = "CNAME";
                 }
 
 
 
-                currByte += 2;
-                //Console.WriteLine("Answer val: " + answerType );
+                currByte += 2;           
 
                 // read in class
                 classVal = TranslateBytes(resultBuffer, currByte, 2);
-                currByte += 2;
-                //Console.WriteLine("Class val: " + classVal);
+                currByte += 2;                
 
 
                 // time to live
                 int ttl = TranslateBytes(resultBuffer, currByte, 4);
-                currByte += 4;
-                //Console.WriteLine("time to live: " + ttl);
+                currByte += 4;                
 
                 // data length
                 int dataLength = TranslateBytes(resultBuffer, currByte, 2);
-                currByte += 2;
-                //Console.WriteLine("data length: " + dataLength);
+                currByte += 2;                
 
                 // address
                 StringBuilder ipadd;
@@ -290,8 +308,8 @@ namespace dig
                     ipadd = new StringBuilder();
                     for (int i = 0; i < dataLength; i++)
                     {
-                        ipadd.Append((int)resultBuffer[currByte]);
-                        ipadd.Append(".");
+                        if (i != 0) { ipadd.Append(".");  }
+                        ipadd.Append((int)resultBuffer[currByte]);                        
                         currByte++;
                     }
                 }
@@ -303,7 +321,7 @@ namespace dig
                         if (i != 0) { ipadd.Append(":"); } 
 
                         string[] nextSegment = new string[2];
-                        //resultBuffer[currByte].ToString() + resultBuffer[currByte]
+                        
                         string part1 = resultBuffer[currByte].ToString("x2");
                         string part2 = resultBuffer[currByte+1].ToString("x2");
                         part2 = (part1 + part2).TrimStart('0');
@@ -324,33 +342,28 @@ namespace dig
                     StringBuilder sb2 = new StringBuilder();
                     string cname;
 
-                    //while (currByte < endOfData )
-                    //{
+                    int cnameLengthLeft = dataLength;
 
-                    
+                    int startOfCname = currByte;
+                    string cnameStr = ReadString(resultBuffer, ref currByte, dataLength);
+                    this.pointerList[startOfCname]  = cnameStr;
 
-                        int cnameLengthLeft = dataLength;
-                        string cnameStr = ReadString(resultBuffer, ref currByte);
-
-                    //}
-
+                    sb2.Append(cnameStr);
                     ipadd = sb2;
                     cname = sb2.ToString();
-                    Console.WriteLine("cname found " + cname);
                 }
                 else
                 {
                     throw new Exception("Unacceptable DNS Type found in Answer");
                 }
-                
 
-                
+
+
                 //int address = TranslateBytes(resultBuffer, currByte, dataLength);
                 //currByte += dataLength;
-                
-
-                Console.WriteLine(";" + resultStr + "\t" + ttl + "\t" + classVal + "\t" + dnsTypeString + "\t" + ipadd.ToString());
-                
+                   
+                Console.WriteLine(String.Format(";{0,-30} {1,-15} {2, -10} {3, -20} {4, -20}",
+                        resultStr, ttl, "IN", dnsTypeString, ipadd.ToString()));
 
             }
 
@@ -378,56 +391,46 @@ namespace dig
             return result;
         }
 
-        async void Udp(Byte[] data, IPAddress dnsAddress, string hostname, DnsType dnsType)
+        async void SendUdpRequest(Byte[] data, IPAddress dnsAddress, string hostname, DnsType dnsType)
         {
             try
             {
                 var client = new UdpClient(5080);
                 
-                var ep = new System.Net.IPEndPoint(dnsAddress, 53);
-                    
-                //System.Console.WriteLine(ep.Address.ToString() + " " + ep.Port);
-                    
-                var msg = data;//System.Text.Encoding.ASCII.GetBytes(data);
+                var ep = new IPEndPoint(dnsAddress, 53);
 
 
-                Console.WriteLine();
                 Console.WriteLine();
                 Console.WriteLine(";; QUESTION SECTION");
-                Console.Write(";" + hostname + "." + "  IN" + " ");
-                Console.WriteLine((dnsType == DnsType.A) ? "A" : "AAAA");
+                string typeStr = (dnsType == DnsType.A) ? "A" : "AAAA";
+                Console.WriteLine(String.Format(";{0,-30} {1,-10} {2, -10} \n",
+                        hostname, "IN", typeStr));
 
                 var watch = System.Diagnostics.Stopwatch.StartNew();
 
-                var i = await client.SendAsync(msg, msg.Length, ep);                           
+                var i = await client.SendAsync(data, data.Length, ep);                           
 
                 UdpReceiveResult response = await client.ReceiveAsync();
                 watch.Stop();
 
                 ReadResponse(response, hostname);
 
-                Console.WriteLine("Query Time: " + watch.ElapsedMilliseconds + "ms");
-                Console.WriteLine("Server: " + dnsAddress);
-                Console.WriteLine("WHEN: " + DateTime.Now);
-                Console.WriteLine("MSG SIZE rcvd: " + response.Buffer.Length);
-
-                Thread.Sleep(5000);
-                //Console.WriteLine("response received from " + response.RemoteEndPoint);         
-                    
-                    
-                //Console.WriteLine(i + " bytes sent");
+                Console.WriteLine();
+                Console.WriteLine(";;Query Time: " + watch.ElapsedMilliseconds + "ms");
+                Console.WriteLine(";;Server: " + dnsAddress);
+                Console.WriteLine(";;WHEN: " + DateTime.Now.ToString("dddd MMM dd HH:mm:ss yyyy"));
+                Console.WriteLine(";;MSG SIZE rcvd: " + response.Buffer.Length);
                 
             }
             catch (Exception e)
             {
-                Console.WriteLine(e);
                 Console.WriteLine("UDP Client failed");
             }
         }
 
         private IPAddress FindDefaultDNS()
         {
-            Boolean isValid; // = false;
+            Boolean isValid;
 
             foreach (var netI in NetworkInterface.GetAllNetworkInterfaces())
             {
@@ -459,25 +462,112 @@ namespace dig
 
             }
 
-            throw new Exception("Could not find DNS Server");
+            throw new Exception("Could not find default DNS Server");
         }
 
-        private string ReadString(byte[] resultBuffer, ref int currByte)
+        private string ReadString(byte[] resultBuffer, ref int currByte, int maxBytesToRead)
         {
-            string resultStr;
-            // pointer detected!!!!!
-            if (resultBuffer[currByte] == 0xc0)
-            {
-                StringBuilder sb = new StringBuilder();
+            StringBuilder sb = new StringBuilder();
+            int bytesRead = 0;
 
 
-                int runLengthLeft; //= currByte + 1;
-
-                int offset = resultBuffer[currByte + 1];
-                int pointer = offset; //= currByte + 2;
-
-                while (resultBuffer[pointer] != 0)
+            while (resultBuffer[currByte] != 0 && bytesRead < maxBytesToRead)
+            {            
+                // pointer detected!!!!!
+                if (resultBuffer[currByte] == 0xc0)
                 {
+                    int offset = resultBuffer[currByte + 1];
+                    string pointerVal = GetPointerValue(resultBuffer, offset);
+                    sb.Append(pointerVal);
+
+                    //ReadPointer(resultBuffer, currByte, sb);
+                    currByte += 2;
+                    bytesRead += 2;
+                }
+                else
+                {                    
+                    int runLengthLeft;
+
+                    int startByte = currByte;
+                    int pastStrLen = sb.Length;
+
+
+                    int pointer = currByte; //= currByte + 2;
+                    
+                    runLengthLeft = resultBuffer[pointer];
+                    pointer++;
+                    bytesRead++;
+
+                    while (runLengthLeft > 0)   //resultBuffer[pointer] != 0)
+                    {
+                        sb.Append(Encoding.ASCII.GetString(new[] { resultBuffer[pointer] }));
+                        runLengthLeft--;
+                        pointer++;
+                        bytesRead++;
+                    }
+
+                    this.pointerList[startByte] = sb.ToString(pastStrLen, currByte - startByte);
+
+                    if (resultBuffer[pointer] != 0) { sb.Append("."); }                    
+
+                    currByte = pointer++;
+                    
+                }
+            }
+
+
+            return sb.ToString();
+        }
+
+        private string GetPointerValue(byte[] resultBuffer, int ptrStart)
+        {
+            int offset = 0; ;
+            int nextPointerInd = ptrStart + offset;
+            Boolean done = false;
+
+
+            StringBuilder pointerValue = new StringBuilder();
+            while (!done)
+            {
+                string currStr = pointerList[nextPointerInd];
+                nextPointerInd = nextPointerInd + currStr.Length + 1;
+
+                pointerValue.Append(currStr);
+                
+
+                if (!pointerList.ContainsKey(nextPointerInd))
+                {
+                    done = true;
+                }
+                else
+                {
+                    pointerValue.Append(".");
+                }
+
+
+            }
+
+            return pointerValue.ToString();
+        }
+
+        private void ReadPointer(byte[] resultBuffer, int currByte, StringBuilder sb)
+        {            
+
+
+            int runLengthLeft; //= currByte + 1;
+
+            int offset = resultBuffer[currByte + 1];
+            int pointer = offset; //= currByte + 2;
+
+            while (resultBuffer[pointer] != 0)
+            {
+                if (resultBuffer[pointer] == 0xc0)
+                {
+                    ReadPointer(resultBuffer, currByte, sb);
+                    currByte += 2;
+                }
+                else
+                {                
                     runLengthLeft = resultBuffer[pointer];
                     pointer++;
 
@@ -489,42 +579,10 @@ namespace dig
                     }
 
                     if (resultBuffer[pointer] != 0) { sb.Append("."); }
-
                 }
-
-                resultStr = sb.ToString();
-                currByte += 2;
-
-                return resultStr;
             }
-            else
-            {
-                StringBuilder sb = new StringBuilder();
 
-                int runLengthLeft;
-
-                int pointer = currByte; //= currByte + 2;
-
-                while (resultBuffer[pointer] != 0)
-                {
-                    runLengthLeft = resultBuffer[pointer];
-                    pointer++;
-
-                    while (runLengthLeft > 0)   //resultBuffer[pointer] != 0)
-                    {
-                        sb.Append(Encoding.ASCII.GetString(new[] { resultBuffer[pointer] }));
-                        runLengthLeft--;
-                        pointer++;
-                    }
-
-                    if (resultBuffer[pointer] != 0) { sb.Append("."); }
-
-                }
-
-                currByte = pointer++;
-                resultStr = sb.ToString();
-                return resultStr;
-            }
+            //resultStr = sb.ToString();            
         }
 
     }
