@@ -1,6 +1,11 @@
-﻿using System;
-using System.IO;
-using System.Threading;
+﻿/**
+ * Author: David Egan
+ * File: Program.cs
+ * Project: Not A Network Messenger (CSCI-253)
+ * Date: 11/26/18
+ */
+
+using System;
 using System.Net.Sockets;
 using System.Net;
 using System.Linq;
@@ -17,6 +22,7 @@ namespace dig
         CNAME
     }
 
+    /* TODO: Break into more classes and files, this is messy as is */
     class Program
     {
         Dictionary<int, String> pointerList = new Dictionary<int, string>();
@@ -162,17 +168,7 @@ namespace dig
             }
             currByte++;            
 
-            // Type: 2 bytes 0001 is Type A, 001c is Type AAAA
-            DnsType type = 0;
-            if (resultBuffer[currByte] == 0x00 && resultBuffer[currByte+1] == 0x01)
-            {
-                type = DnsType.A;
-            }            
-            else if (resultBuffer[currByte] == 0x00 && resultBuffer[currByte+1] == 0x1c)
-            {
-                type = DnsType.AAAA;
-            }
-
+            // Type: ignore for query           
             currByte += 2;
             
             // Class: 2 bytes maybe doesnt matter            
@@ -304,8 +300,7 @@ namespace dig
                 var client = new UdpClient(5080);
                 
                 var ep = new IPEndPoint(dnsAddress, 53);
-
-
+                                
                 Console.WriteLine();
                 Console.WriteLine(";; QUESTION SECTION");
                 string typeStr = (dnsType == DnsType.A) ? "A" : "AAAA";
@@ -321,14 +316,13 @@ namespace dig
 
                 Console.WriteLine();
                 Console.WriteLine(";;Query Time: " + watch.ElapsedMilliseconds + "ms");
-                Console.WriteLine(";;Server: " + dnsAddress);
+                Console.WriteLine(";;DNS Server Used: " + dnsAddress);
                 Console.WriteLine(";;WHEN: " + DateTime.Now.ToString("dddd MMM dd HH:mm:ss yyyy"));
-                Console.WriteLine(";;MSG SIZE rcvd: " + response.Length);
-                
+                Console.WriteLine(";;MSG SIZE rcvd: " + response.Length);                                
             }
             catch (Exception e)
             {
-                Console.WriteLine("UDP Client failed");
+                Console.WriteLine("UDP Client failed - " + e);
             }
         }
 
@@ -348,8 +342,7 @@ namespace dig
 
 
 
-                    if ((uniIpAddrInfo.Address.AddressFamily == AddressFamily.InterNetwork || uniIpAddrInfo.Address.AddressFamily == AddressFamily.InterNetworkV6) &&
-                        uniIpAddrInfo.AddressPreferredLifetime != uint.MaxValue) {
+                    if ((uniIpAddrInfo.Address.AddressFamily == AddressFamily.InterNetwork || uniIpAddrInfo.Address.AddressFamily == AddressFamily.InterNetworkV6)  ) {
 
                         isValid = true;
                         break;
@@ -376,15 +369,13 @@ namespace dig
 
 
             while (resultBuffer[currByte] != 0 && bytesRead < maxBytesToRead)
-            {            
-                // pointer detected!!!!!
+            {                            
                 if (resultBuffer[currByte] == 0xc0)
                 {
                     int offset = resultBuffer[currByte + 1];
                     string pointerVal = GetPointerValue(resultBuffer, offset);
                     sb.Append(pointerVal);
-
-                    //ReadPointer(resultBuffer, currByte, sb);
+                    
                     currByte += 2;
                     bytesRead += 2;
                 }
@@ -396,13 +387,13 @@ namespace dig
                     int pastStrLen = sb.Length;
 
 
-                    int pointer = currByte; //= currByte + 2;
+                    int pointer = currByte;
                     
                     runLengthLeft = resultBuffer[pointer];
                     pointer++;
                     bytesRead++;
 
-                    while (runLengthLeft > 0)   //resultBuffer[pointer] != 0)
+                    while (runLengthLeft > 0)
                     {
                         sb.Append(Encoding.ASCII.GetString(new[] { resultBuffer[pointer] }));
                         runLengthLeft--;
@@ -418,8 +409,6 @@ namespace dig
                     
                 }
             }
-
-
             return sb.ToString();
         }
 
@@ -458,10 +447,10 @@ namespace dig
         {            
 
 
-            int runLengthLeft; //= currByte + 1;
+            int runLengthLeft;
 
             int offset = resultBuffer[currByte + 1];
-            int pointer = offset; //= currByte + 2;
+            int pointer = offset;
 
             while (resultBuffer[pointer] != 0)
             {
@@ -475,7 +464,7 @@ namespace dig
                     runLengthLeft = resultBuffer[pointer];
                     pointer++;
 
-                    while (runLengthLeft > 0)   //resultBuffer[pointer] != 0)
+                    while (runLengthLeft > 0)
                     {
                         sb.Append(Encoding.ASCII.GetString(new[] { resultBuffer[pointer] }));
                         runLengthLeft--;
@@ -484,9 +473,7 @@ namespace dig
 
                     if (resultBuffer[pointer] != 0) { sb.Append("."); }
                 }
-            }
-
-            //resultStr = sb.ToString();            
+            }         
         }
 
     }
